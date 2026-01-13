@@ -10,9 +10,8 @@
 ## Sending and receiving commands
 - Commands must be terminated with \r\n
 - Commands can have leading and trailing whitespace and variable number of whitespace in between args (Unix-like) (good for users)
-- response for everything except send command is in ascii (read until \r\n)
-- for send command, first 4 bytes are the number of bytes incoming (big endian) (if length is zero, an error has occured), then that many number of bytes (dont stop at \r\n)
-- see `receiver.c` for example code
+- response for everything except send and photo command is in ascii (read until \r\n)
+- for send and photo command, first 4 bytes are the number of bytes incoming (big endian) (if length is zero, an error has occured), then that many number of bytes (dont stop at \r\n)
 
 ## Setup
 ### Config
