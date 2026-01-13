@@ -62,10 +62,7 @@ bool E32_write_bytes(E32_Device* device, uint8_t* data, size_t len) {
 }
 
 bool E32_write_byte(E32_Device* device, uint8_t* data) {
-    if (write(device->fd, data, 1) != 1) {
-        perror("write");
-        return false;
-    } 
+    if (write(device->fd, data, 1) != 1) {perror("write"); return false;} 
     return true;
 }
 

@@ -24,6 +24,8 @@
 #define MAX_ARGS 10
 #define COMMAND_BUFFER_SIZE 2048
 #define STATUS_RESPONSE_BUFFER_SIZE 1024
+#define IMAGE_READ_CHUNK_SIZE 256
+#define LS_READ_CHUNK_SIZE 256
 #define MAIN_LOOP_SLEEP_TIME 10000
 
 // (taken from stratolink repo) takes a photo with fswebcam
@@ -46,11 +48,8 @@ static inline void send_string(E32_Device* device, char* str){
     E32_write_bytes(device, (uint8_t*)str, strlen(str));
 }
 static inline void send_four_zero(E32_Device* device) {
-    uint8_t byte_buffer=0;
-    E32_write_byte(device, &byte_buffer); 
-    E32_write_byte(device, &byte_buffer); 
-    E32_write_byte(device, &byte_buffer); 
-    E32_write_byte(device, &byte_buffer);
+    uint8_t zeros[4] = {0, 0, 0, 0};
+    E32_write_bytes(device, zeros, 4);
 }
 
 // 4 bytes of length followed by the bytes
@@ -63,12 +62,16 @@ static inline bool send_photo(E32_Device* device, char* path){
     if (bytes_count == (size_t)-1L) {fclose(file_handle); return false;}
     if(fseek(file_handle, 0, SEEK_SET)!=0) {fclose(file_handle); return false;}
 
-    uint8_t byte_buffer;
-    byte_buffer = (uint8_t)(bytes_count >> 24 & 0xFF); E32_write_byte(device, &byte_buffer);
-    byte_buffer = (uint8_t)(bytes_count >> 16 & 0xFF); E32_write_byte(device, &byte_buffer);
-    byte_buffer = (uint8_t)(bytes_count >> 8 & 0xFF); E32_write_byte(device, &byte_buffer);
-    byte_buffer = (uint8_t)(bytes_count & 0xFF); E32_write_byte(device, &byte_buffer);
-    while (fread(&byte_buffer, 1, 1, file_handle)) E32_write_byte(device, &byte_buffer);
+    uint8_t size_bytes[4];
+    size_bytes[0] = (uint8_t)(bytes_count >> 24 & 0xFF);
+    size_bytes[1] = (uint8_t)(bytes_count >> 16 & 0xFF);
+    size_bytes[2] = (uint8_t)(bytes_count >> 8 & 0xFF);
+    size_bytes[3] = (uint8_t)(bytes_count & 0xFF);
+    E32_write_bytes(device, size_bytes, 4);
+
+    uint8_t image_chunk_buffer[IMAGE_READ_CHUNK_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(image_chunk_buffer, 1, IMAGE_READ_CHUNK_SIZE, file_handle)) > 0) {E32_write_bytes(device, image_chunk_buffer, bytes_read);}
 
     fclose(file_handle);
 
@@ -90,13 +93,14 @@ static inline void handle_command(E32_Device* device, char* command, size_t comm
         FILE* ls_command_handle=popen("ls -l", "r");
         if (!ls_command_handle) {send_string(device, "Couldnt run ls\r\n"); return;}
 
-        char character_buffer;
-        while (fread(&character_buffer, 1, 1, ls_command_handle)) E32_write_byte(device, (uint8_t*)&character_buffer);
+        char ls_read_chunk_buffer[256];
+        size_t bytes_read;
+        while ((bytes_read = fread(ls_read_chunk_buffer, 1, LS_READ_CHUNK_SIZE, ls_command_handle)) > 0) E32_write_bytes(device, (uint8_t*)ls_read_chunk_buffer, bytes_read);
 
         pclose(ls_command_handle);
 
-        character_buffer='\r'; E32_write_byte(device, (uint8_t*)&character_buffer);
-        character_buffer='\n'; E32_write_byte(device, (uint8_t*)&character_buffer);
+        char crlf[2] = {'\r', '\n'};
+        E32_write_bytes(device, (uint8_t*)crlf, 2);
 
         E32_wait_for_aux(device);
     }
